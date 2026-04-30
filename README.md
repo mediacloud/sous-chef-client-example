@@ -29,15 +29,29 @@ Pin `sous-chef-kitchen-client` to a tag in `pyproject.toml` instead of `@main` w
 | `KITCHEN_BASE_URL` | Kitchen API base (default in `app/config.py`) |
 | `KITCHEN_AUTH_EMAIL` | `mediacloud-email` header |
 | `KITCHEN_AUTH_KEY` | Bearer token |
+| `PUBLIC_APP_URL` | Optional. Public HTTPS **origin** for this app (**no** trailing slash), e.g. `https://abc.ngrok-free.app`. Used with `WEBHOOK_PATH` so `GET /api/config` can return `suggested_webhook_url` for `recipe_parameters.webhook_url`. |
+| `WEBHOOK_PATH` | Path for the local webhook handler (default `/webhooks/sous-chef`). |
+| `WEBHOOK_SECRET` | If set, `POST /webhooks/sous-chef` requires header `X-Webhook-Secret` to match. |
 
 If email/key are missing, every route that talks to Kitchen returns **503** with a short explanation. `GET /api/config` only reads local settings (no network).
+
+### Public URL / ngrok (webhooks from Kitchen)
+
+Kitchen needs a **reachable** URL for `webhook_url` inside `recipe_parameters` when a flow posts completion payloads to your service.
+
+1. Run the app locally (`uvicorn` on port **8010**).
+2. Start a tunnel (example: [ngrok](https://ngrok.com/) — `ngrok http 8010`) and copy the **HTTPS** forwarding URL.
+3. Set **`PUBLIC_APP_URL`** to that origin (no trailing slash), e.g. `export PUBLIC_APP_URL=https://abcd-1234.ngrok-free.app`.
+4. Call **`GET /api/config`**: use **`suggested_webhook_url`** as `webhook_url` when starting runs (or build `PUBLIC_APP_URL` + `webhook_path` yourself).
+
+If **`WEBHOOK_SECRET`** is set, pass the same value in **`webhook_secret`** in `recipe_parameters` so Kitchen can send **`X-Webhook-Secret`** to your receiver.
 
 ## HTTP API
 
 | Method | Path | Role |
 |--------|------|------|
 | GET | `/health` | — |
-| GET | `/api/config` | Local env summary |
+| GET | `/api/config` | Local env summary (`public_app_url`, `suggested_webhook_url`, `webhook_path`, …) |
 | GET | `/api/auth/validate` | `validate_auth()` |
 | GET | `/api/recipes` | `recipe_list()` |
 | GET | `/api/recipes/schema?recipe_name=` | `recipe_schema()` |
@@ -56,9 +70,7 @@ Pass **`webhook_url`** / **`webhook_secret`** inside **`recipe_parameters`** whe
 |--------|------|--------|
 | POST | `/webhooks/sous-chef` | Logs one line and writes the JSON body to a **temp file** (returns `saved_path`). |
 
-Optional env **`WEBHOOK_SECRET`**: when set, requests must send the same value as header **`X-Webhook-Secret`** or the handler returns 403.
-
-`GET /api/config` includes **`webhook_path`** (default `/webhooks/sous-chef`) so you can build a full URL (e.g. ngrok) + path for `webhook_url` in `POST /api/runs`.
+See the **Environment** table and **Public URL / ngrok** above for **`PUBLIC_APP_URL`**, **`suggested_webhook_url`**, and **`WEBHOOK_SECRET`**.
 
 ### Examples
 
@@ -111,7 +123,7 @@ curl -s -X POST http://127.0.0.1:8010/api/runs \
 ### Design notes
 
 - **Settings** are cached (`get_settings()`); tests that change env should call `get_settings.cache_clear()`.
-- **Queue** (`run_queue`): one asyncio worker; in-memory jobs are guarded by a lock because sync handlers read status while the worker updates state.
+- **Queue** (`run_queue`): one asyncio worker processes **`start_recipe`** calls **one after another**; see the module docstring at the top of `app/run_queue.py` for what “serial” does and does not guarantee. In-memory jobs are guarded by a lock because sync handlers read status while the worker updates state.
 - **Kitchen errors** → HTTP **502** with truncated detail; missing Kitchen credentials → **503** via `KitchenSettings`.
 
 ## Layout

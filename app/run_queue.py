@@ -1,7 +1,18 @@
 """
-Very thin in-memory queue: enqueue ``start_recipe`` work and process it serially in the background.
+Very thin in-memory queue: enqueue Kitchen ``start_recipe`` work and process it **serially**
+in a single asyncio worker.
 
-Demonstrates the same *shape* as a larger app's Kitchen submission queue without persistence.
+**Ordering:** The worker handles **one job at a time**. It awaits each ``kitchen_start_recipe``
+call (HTTP ``start_recipe`` to Kitchen) before starting the next queued job. That serializes
+**submissions** to Kitchen when multiple clients hit ``POST /api/queue/runs``.
+
+**What “done” means:** A queue job reaches ``completed`` when Kitchen’s ``start_recipe`` returns
+successfully (or ``failed`` if it raises). This does **not** mean the remote Sous-Chef recipe has
+finished processing—usually Kitchen accepts the run and returns metadata quickly while work
+continues asynchronously. Only if the client API blocked until the run finished would the queue
+implicitly wait for that.
+
+Demonstrates the same *shape* as a larger app’s Kitchen submission queue without persistence.
 """
 
 from __future__ import annotations

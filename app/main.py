@@ -81,6 +81,8 @@ def public_config() -> dict[str, object]:
         "credentials_configured": s.has_kitchen_credentials(),
         "webhook_path": s.webhook_path,
         "webhook_secret_configured": s.webhook_auth_configured(),
+        "public_app_url": s.public_app_url or None,
+        "suggested_webhook_url": s.suggested_webhook_url(),
     }
 
 

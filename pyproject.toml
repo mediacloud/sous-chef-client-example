@@ -1,18 +1,21 @@
 [project]
 name = "minimal-sous-chef-reference"
 version = "0.1.0"
-description = "Tiny reference: enqueue jobs, template params, async worker, webhook callback"
+description = "FastAPI reference for sous-chef-kitchen-client (Kitchen API proxy + maps query helpers)"
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
-    "fastapi>=0.115.0",
-    "uvicorn[standard]>=0.32.0",
-    "httpx>=0.27.0",
-    "pydantic>=2.0.0",
+    # Align floors with sous-chef-kitchen-client (pydantic>=2.11) and current FastAPI stacks.
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.30",
+    "httpx>=0.27",
+    "pydantic>=2.11",
+    "pydantic-settings>=2.5",
+    "sous-chef-kitchen-client @ git+https://github.com/mediacloud/sous-chef-kitchen-client@main",
 ]
 
 [project.optional-dependencies]
-dev = ["pytest>=8.0.0", "httpx>=0.27.0"]
+dev = ["pytest>=8.0.0"]
 
 [build-system]
 requires = ["setuptools>=61.0"]

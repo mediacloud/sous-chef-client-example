@@ -1,14 +1,9 @@
 from __future__ import annotations
 
-import time
-
-import pytest
-from fastapi.testclient import TestClient
-
-from app.main import app
-from app.maps_experiment_queries import (
+from app.maps_queries import (
     HEALTH_STATE_COLLECTION_ID,
     HEALTH_STATE_QUERY_TEMPLATE,
+    TAGGED_FILTERED_SUMMARIES_RECIPE,
     health_state_query_for_state_name,
 )
 from app.templates import build_location_clause, render_maps_style_query
@@ -21,7 +16,7 @@ def test_location_and_query_template() -> None:
     assert "LOCATION_PLACEHOLDER" not in q
 
 
-def test_maps_health_query_matches_results_shell() -> None:
+def test_maps_health_query_strings() -> None:
     assert "LOCATION_PLACEHOLDER" in HEALTH_STATE_QUERY_TEMPLATE
     assert "health health health" in HEALTH_STATE_QUERY_TEMPLATE
     assert HEALTH_STATE_COLLECTION_ID == 38376341
@@ -32,32 +27,26 @@ def test_maps_health_query_matches_results_shell() -> None:
     assert "LOCATION_PLACEHOLDER" not in full
 
 
-def test_job_completes_with_webhook_attempt() -> None:
-    with TestClient(app) as client:
-        r = client.post(
-            "/jobs",
-            json={
-                "recipe_name": "unit",
-                "parameter_templates": {"query": "(LOCATION_PLACEHOLDER)"},
-                "template_context": {"location_expression": '("Z")'},
-                "input_records": [{"state_code": "Z"}],
-                "webhook_url": "http://127.0.0.1:9/unreachable",
-            },
-        )
-        assert r.status_code == 200
-        jid = r.json()["id"]
+def test_tagged_filtered_summaries_is_registered_kitchen_recipe_name() -> None:
+    """Kitchen / Sous-Chef register this flow as ``tagged_filtered_summaries`` (not ``..._summary``)."""
+    assert TAGGED_FILTERED_SUMMARIES_RECIPE == "tagged_filtered_summaries"
 
-        final = None
-        for _ in range(200):
-            g = client.get(f"/jobs/{jid}")
-            assert g.status_code == 200
-            final = g.json()
-            if final["status"] == "completed" and final["webhook_delivered"] is not None:
-                break
-            time.sleep(0.01)
-        else:
-            pytest.fail(f"timeout last={final}")
 
-        assert final["rendered_parameters"]["query"] == '(("Z"))'
-        assert final["webhook_delivered"] is False
-        assert final["webhook_error"]
+def test_example_post_body_for_tagged_filtered_summaries() -> None:
+    """
+    Illustrative ``POST /api/runs`` JSON: maps helpers feed ``recipe_parameters.query``
+    for the aboutness + summaries pipeline.
+    """
+    query = health_state_query_for_state_name("Lagos")
+    assert query is not None
+    body = {
+        "recipe_name": TAGGED_FILTERED_SUMMARIES_RECIPE,
+        "recipe_parameters": {
+            "query": query,
+            "collection_ids": [HEALTH_STATE_COLLECTION_ID],
+            "start_date": "2025-01-01",
+            "end_date": "2025-01-31",
+        },
+    }
+    assert body["recipe_name"] == "tagged_filtered_summaries"
+    assert "health health health" in body["recipe_parameters"]["query"]

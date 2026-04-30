@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from .maps_experiment_queries import build_location_clause
+from .maps_queries import build_location_clause
 
 
 def render_parameter_templates(

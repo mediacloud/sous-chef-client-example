@@ -126,6 +126,19 @@ curl -s -X POST http://127.0.0.1:8010/api/runs \
 - **Queue** (`run_queue`): one asyncio worker processes **`start_recipe`** calls **one after another**; see the module docstring at the top of `app/run_queue.py` for what “serial” does and does not guarantee. In-memory jobs are guarded by a lock because sync handlers read status while the worker updates state.
 - **Kitchen errors** → HTTP **502** with truncated detail; missing Kitchen credentials → **503** via `KitchenSettings`.
 
+### Kitchen flow quota (vs this demo queue)
+
+Kitchen enforces a **per-user** limit on **concurrently active** parent flow runs. The limit is applied when you call **`start_recipe`**: if the user already has that many active runs, Kitchen rejects the start with an error about **allocated flows** / **cannot start a new recipe run**. That is **independent** of this reference app’s in-process queue: **`POST /api/queue/runs`** only processes **`start_recipe`** calls **one at a time** in this process; it does **not** call Kitchen’s quota API and does not free a slot when a run finishes in the background.
+
+To build a **production-style** submitter (or a queue that allows **parallel** Kitchen submissions up to the real cap):
+
+- **Introspect quota** with Kitchen **`GET /user/flow-status`** (same **`mediacloud-email`** + **`Authorization`** headers as other Kitchen calls). The JSON includes **`active_flows`**, **`max_flows`**, and **`at_capacity`**. Rough remaining capacity is **`max_flows - active_flows`** when not at capacity.
+- **`GET /system/status`** also exposes **`max_user_flows`** on the Kitchen side; **`sous-chef-kitchen-client`** wraps system status via **`fetch_system_status()`** but may **not** ship a helper for **`/user/flow-status`** yet—call that path with the same session headers, or add a thin wrapper in your app.
+- **Submit** only when **`at_capacity`** is false (or only fire as many parallel **`start_recipe`** calls as you have slots). Keep your local concurrency **`≤ max_flows`** for that environment, or handle rejections.
+- **Backoff**: if **`start_recipe`** still fails with an allocation message, retry later—same idea as treating Kitchen as backpressure.
+
+This reference app omits that logic on purpose; use it as a pattern for HTTP + **`recipe_parameters`**, not as a full scheduler.
+
 ## Layout
 
 | Path | Role |
